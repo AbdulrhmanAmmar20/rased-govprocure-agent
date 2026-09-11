@@ -1,0 +1,82 @@
+# Default deny for the whole namespace. Every allowance below is additive, so
+# a pod added later without its own policy has no connectivity at all rather
+# than inheriting someone else's.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: rased
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# The API: ingress from the ingress controller only, egress to DNS and vLLM.
+#
+# There is no egress rule permitting the public internet, and that omission is
+# the control. NFR-1.1 is otherwise a promise the application makes about
+# itself; here the cluster refuses the packet regardless of what the
+# application, a dependency, or an injected instruction tries to do.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rased-api
+  namespace: rased
+spec:
+  podSelector:
+    matchLabels:
+      app: rased-api
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# vLLM: reachable only from the API, and permitted no egress whatsoever.
+#
+# The model process cannot open a connection to anything — not the internet,
+# not another namespace, not even DNS. A model that cannot originate traffic
+# cannot exfiltrate a prompt, which makes the zero-retention posture in
+# NFR-1.3 structural rather than contractual.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm
+  namespace: rased
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: rased-api
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress: []
