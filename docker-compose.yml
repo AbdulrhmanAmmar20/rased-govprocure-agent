@@ -1,0 +1,80 @@
+# Local stand-in for the sovereign deployment.
+#
+# The network topology is the point: only the `edge` network is reachable from
+# outside, and vllm sits alone on `sovereign`, which is declared internal. The
+# inference engine therefore has no route to the internet at all — the data
+# sovereignty requirement is enforced by the network, not by the application
+# remembering to behave (NFR-1.1).
+
+name: rased
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rased/govprocure-agent:1.0.0
+    restart: unless-stopped
+    networks: [edge, sovereign]
+    ports:
+      - "8000:8000"
+    environment:
+      RASED_ENVIRONMENT: ${RASED_ENVIRONMENT:-development}
+      RASED_DATA_RESIDENCY_REGION: sa-riyadh-1
+      RASED_LLM_BASE_URL: http://vllm:8000/v1
+      RASED_LLM_MODEL: ${RASED_LLM_MODEL:-Qwen2.5-7B-Instruct}
+      RASED_JWT_SECRET: ${RASED_JWT_SECRET:?set RASED_JWT_SECRET in .env}
+      RASED_VECTOR_BACKEND: ${RASED_VECTOR_BACKEND:-memory}
+      RASED_AUDIT_LOG_PATH: /var/lib/rased/audit/audit.jsonl
+    volumes:
+      - audit:/var/lib/rased/audit
+    depends_on:
+      vllm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx,sys; sys.exit(0 if httpx.get('http://127.0.0.1:8000/api/v1/health/live', timeout=2).status_code==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    restart: unless-stopped
+    # No ports published and no edge network: reachable only from `api`.
+    networks: [sovereign]
+    command:
+      - --model=${RASED_LLM_MODEL:-Qwen2.5-7B-Instruct}
+      - --served-model-name=${RASED_LLM_MODEL:-Qwen2.5-7B-Instruct}
+      - --max-model-len=8192
+      - --port=8000
+    environment:
+      # NFR-1.3 — nothing about a request may be retained or reported onward.
+      HF_HUB_OFFLINE: "1"
+      DO_NOT_TRACK: "1"
+      VLLM_NO_USAGE_STATS: "1"
+    volumes:
+      - models:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  edge:
+    driver: bridge
+  sovereign:
+    driver: bridge
+    # No gateway to the host network: containers here cannot reach outside.
+    internal: true
+
+volumes:
+  audit:
+    # The audit trail outlives any container. Losing it would destroy the
+    # record FR-5.1 exists to keep, so it is never a bind mount into the tree.
+  models:
