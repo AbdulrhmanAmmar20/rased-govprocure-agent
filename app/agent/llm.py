@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -34,6 +37,31 @@ SOVEREIGN_HOST_SUFFIXES = (
     ".local",
     ".gov.local",
 )
+
+
+# Liveness probes are cached per endpoint so a down inference service costs
+# one connect timeout per window rather than one per request.
+_AVAILABILITY_TTL_SECONDS = 15.0
+_PROBE_TIMEOUT_SECONDS = 1.0
+
+# Hard wall-clock ceiling on a liveness probe, enforced independently of the
+# HTTP client. An httpx timeout does not bound name resolution: a cluster
+# hostname that does not resolve costs about 3.5s in the platform resolver on
+# some hosts, which alone would consume most of the NFR-2.2 budget. Running the
+# probe on a worker and abandoning it at the deadline makes the worst case a
+# property of this module rather than of the host's resolver configuration.
+_PROBE_DEADLINE_SECONDS = 1.5
+
+_probe_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rased-llm-probe")
+
+_availability_cache: dict[str, tuple[bool, float]] = {}
+_availability_lock = threading.Lock()
+
+
+def reset_availability_cache() -> None:
+    """Drop cached probe results. Used by tests and after a config change."""
+    with _availability_lock:
+        _availability_cache.clear()
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,18 +133,57 @@ class SovereignLLM:
             "X-Rased-Residency": self.settings.data_residency_region,
         }
 
-    def is_available(self) -> bool:
-        """Cheap liveness probe, used to decide whether to fall back."""
+    def is_available(self, *, ttl_seconds: float = _AVAILABILITY_TTL_SECONDS) -> bool:
+        """Cheap liveness probe, used to decide whether to fall back.
+
+        The result is cached per endpoint for a few seconds. Without the cache
+        an unreachable endpoint costs every single request a full connect
+        timeout - measured at roughly three seconds against a down vLLM, which
+        is most of the five-second NFR-2.2 budget spent re-learning something
+        discovered a moment earlier. The TTL is short enough that a recovering
+        endpoint is picked up promptly.
+        """
+        now = time.monotonic()
+        with _availability_lock:
+            cached = _availability_cache.get(self.base_url)
+            if cached is not None and now - cached[1] < ttl_seconds:
+                return cached[0]
+
+        available = self._probe_within_deadline()
+
+        with _availability_lock:
+            _availability_cache[self.base_url] = (available, time.monotonic())
+        return available
+
+    def _probe_within_deadline(self) -> bool:
+        """Run the probe on a worker, abandoning it at the deadline."""
+
+        def probe() -> bool:
+            try:
+                response = httpx.get(
+                    f"{self.base_url}/models",
+                    headers=self._headers(),
+                    timeout=_PROBE_TIMEOUT_SECONDS,
+                )
+                return response.status_code < 500
+            except httpx.HTTPError:
+                return False
+
+        future = _probe_pool.submit(probe)
         try:
-            response = httpx.get(f"{self.base_url}/models", headers=self._headers(), timeout=2.0)
-            return response.status_code < 500
-        except httpx.HTTPError:
+            return future.result(timeout=_PROBE_DEADLINE_SECONDS)
+        except FutureTimeout:
+            # The worker is left to finish and be discarded. Treating a slow
+            # probe as unavailable is the safe reading: the fallback report is
+            # always correct, so a false negative costs prose, not accuracy.
+            logger.warning(
+                "inference liveness probe exceeded its deadline; treating endpoint as down",
+                extra={"base_url": self.base_url, "deadline_s": _PROBE_DEADLINE_SECONDS},
+            )
             return False
 
     def complete(self, system_prompt: str, user_prompt: str) -> LLMResponse:
         """One non-streaming completion, bounded by the NFR-2.2 budget."""
-        import time
-
         started = time.perf_counter()
         payload = {
             "model": self.settings.llm_model,
