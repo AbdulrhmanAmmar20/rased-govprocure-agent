@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rased-govprocure-agent"
+version = "1.0.0"
+description = "راصد — AI compliance & audit agent for Saudi government procurement"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+
+# Runtime floor: every dependency here runs fully inside the sovereign VPC.
+# No dependency may phone home to a non-Kingdom endpoint (NFR-1.1).
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "PyJWT>=2.8",
+    "cryptography>=42.0",
+    "httpx>=0.27",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# The SRS target stack (section 5). Each of these has an in-tree fallback so
+# the service also boots on an air-gapped machine with no wheels available.
+stack = [
+    "langgraph>=0.2",
+    "presidio-analyzer>=2.2",
+    "presidio-anonymizer>=2.2",
+    "chromadb>=0.5",
+]
+postgres = ["psycopg[binary]>=3.1", "pgvector>=0.2"]
+dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.9"]
+
+[project.scripts]
+rased = "app.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.rag" = ["corpus/*.json"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
