@@ -13,8 +13,9 @@ from __future__ import annotations
 import re
 
 from app.pii.entities import DetectedEntity, EntityType
+from app.pii.validators import normalize_arabic
 
-_ARABIC_WORD = r"[ء-يٱ-ۓ]+"
+_ARABIC_WORD = r"[ء-ٰٕٱ-ۓ]+"
 
 # Honorifics and role words that reliably precede a personal name.
 _PERSON_TRIGGERS = (
@@ -42,7 +43,57 @@ _STOP_WORDS = frozenset(
     }
 )
 
+# Compared in folded form so that a stop-word carrying tanween or a hamza
+# variant still terminates the span.
+_FOLDED_STOP_WORDS = frozenset(normalize_arabic(w) for w in _STOP_WORDS)
+
+# Proclitics that attach to the front of an Arabic word: the conjunctions و/ف
+# and the prepositions ب/ك/ل, optionally followed by the definite article ال.
+_PROCLITICS = ("و", "ف", "ب", "ك", "ل")
+_ARTICLE = "ال"
+
+# Below this length, stripping a prefix does more harm than good - it would
+# turn the three-letter name بدر into در and stop a span that should continue.
+_MIN_STEM_LENGTH = 4
+
 _MAX_NAME_WORDS = 4
+
+
+def _stop_word_variants(word: str) -> set[str]:
+    """Every form of ``word`` that should be checked against the stop list.
+
+    Arabic attaches clitics directly to the word, so the stop-word سجل turns
+    up in real text as بالسجل, والسجل or للسجل, and the accusative tanween
+    turns عرض into عرضا. A plain set membership test misses all of those and
+    the span runs on into the following clause, over-masking the sentence.
+    """
+    folded = normalize_arabic(word)
+    variants = {folded}
+
+    stem = folded
+    for _ in range(2):  # at most one proclitic plus the article
+        changed = False
+        if len(stem) > _MIN_STEM_LENGTH and stem[0] in _PROCLITICS:
+            stem = stem[1:]
+            variants.add(stem)
+            changed = True
+        if len(stem) > _MIN_STEM_LENGTH and stem.startswith(_ARTICLE):
+            stem = stem[len(_ARTICLE) :]
+            variants.add(stem)
+            changed = True
+        if not changed:
+            break
+
+    # Accusative ending: عرضا -> عرض
+    for candidate in list(variants):
+        if len(candidate) > 3 and candidate.endswith("ا"):
+            variants.add(candidate[:-1])
+
+    return variants
+
+
+def _is_stop_word(word: str) -> bool:
+    return bool(_stop_word_variants(word) & _FOLDED_STOP_WORDS)
 
 
 def _span_after_trigger(text: str, trigger_end: int) -> tuple[int, int] | None:
@@ -60,7 +111,7 @@ def _span_after_trigger(text: str, trigger_end: int) -> tuple[int, int] | None:
         if not match:
             break
         word = match.group(0)
-        if word in _STOP_WORDS:
+        if _is_stop_word(word):
             break
 
         end = match.end()
