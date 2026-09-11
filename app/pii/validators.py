@@ -119,3 +119,33 @@ def iban_bank_code(value: str) -> str:
     """The two-digit bank identifier inside a Saudi IBAN (positions 5-6)."""
     candidate = strip_separators(normalize_digits(value)).upper()
     return candidate[4:6] if len(candidate) == 24 else ""
+
+
+# Arabic diacritics (tashkeel), tatweel and the superscript alef. These are
+# invisible to a reader but are distinct code points, so a stop-word list or a
+# gazetteer compared without folding them silently stops matching.
+_TASHKEEL = str.maketrans(
+    "",
+    "",
+    "ًٌٍَُِّْ"
+    "ٰٕٓٔـ",
+)
+
+# Orthographic variants of the same letter.
+_LETTER_FOLDING = str.maketrans("أإآٱى", "ااااي")
+
+
+def strip_tashkeel(value: str) -> str:
+    """Drop diacritics and tatweel, leaving the consonantal skeleton."""
+    return value.translate(_TASHKEEL)
+
+
+def normalize_arabic(value: str) -> str:
+    """Fold a word to a comparison form.
+
+    Removes diacritics and unifies the alef and alef-maqsura variants, so that
+    a token written as عرضاً, عرضا or عَرْضًا all compare equal to عرضا.
+    Used only for matching; spans are always reported against the original
+    text so masking offsets stay exact.
+    """
+    return strip_tashkeel(value).translate(_LETTER_FOLDING)
