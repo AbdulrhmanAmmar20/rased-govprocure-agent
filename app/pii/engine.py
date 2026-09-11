@@ -164,6 +164,34 @@ class MaskingEngine:
             within_budget=within_budget,
         )
 
+    def remask(self, text: str, *, session_id: str) -> str:
+        """Re-apply this session's placeholders to text that holds real values.
+
+        The inverse of unmask, and needed because values legitimately travel
+        unmasked *inside* the trust boundary — the tools query the ERP with
+        real CR numbers, so a recorded tool argument holds one. Projecting
+        that straight into an HTTP response would hand an original value to a
+        reader who never passed the pii:reveal check and left no disclosure
+        record, quietly routing around the one audited door onto that data.
+
+        Longest originals are substituted first so that one value which is a
+        substring of another cannot be partially rewritten.
+        """
+        vault = registry.get(session_id)
+        if vault is None:
+            return text
+
+        pairs: list[tuple[str, str]] = []
+        for placeholder in vault.placeholders():
+            original = vault.resolve(placeholder)
+            if original:
+                pairs.append((original, placeholder))
+
+        rewritten = text
+        for original, placeholder in sorted(pairs, key=lambda p: len(p[0]), reverse=True):
+            rewritten = rewritten.replace(original, placeholder)
+        return rewritten
+
     def unmask(self, text: str, *, session_id: str) -> str:
         """Restore original values for display to an authorised caller (FR-1.3).
 
