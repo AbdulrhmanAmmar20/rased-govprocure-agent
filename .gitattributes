@@ -1,0 +1,5 @@
+# Normalise to LF in the repository; Docker/K8s images are Linux-only.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
