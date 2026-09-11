@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Secrets & local state  (NEVER commit - PDPL / NCA ECC-1:2018)
+.env
+*.pem
+*.key
+secrets/
+
+# Runtime artefacts
+data/audit/*.jsonl
+data/chroma/
+logs/
+*.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
