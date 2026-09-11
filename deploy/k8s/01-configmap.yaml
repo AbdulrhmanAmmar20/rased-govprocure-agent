@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rased-config
+  namespace: rased
+data:
+  RASED_ENVIRONMENT: "production"
+  RASED_DATA_RESIDENCY_REGION: "sa-riyadh-1"
+  RASED_LLM_BASE_URL: "http://vllm.rased.svc.cluster.local:8000/v1"
+  RASED_LLM_MODEL: "Qwen2.5-14B-Instruct"
+  RASED_LLM_TIMEOUT_SECONDS: "5"
+  RASED_VECTOR_BACKEND: "chroma"
+  RASED_VECTOR_PATH: "/var/lib/rased/chroma"
+  RASED_AUDIT_LOG_PATH: "/var/lib/rased/audit/audit.jsonl"
+  RASED_DIRECT_PURCHASE_CEILING_SAR: "100000"
+  RASED_MIN_LOCAL_CONTENT_RATIO: "0.30"
+  RASED_PII_LATENCY_BUDGET_MS: "150"
