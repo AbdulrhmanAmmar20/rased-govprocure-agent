@@ -67,7 +67,9 @@ class _Envelope:
 class SessionVault:
     """Placeholder -> original value, for the lifetime of one session."""
 
-    def __init__(self, session_id: str, *, key: bytes | None = None, ttl_seconds: int | None = None):
+    def __init__(
+        self, session_id: str, *, key: bytes | None = None, ttl_seconds: int | None = None
+    ):
         settings = get_settings()
         self.session_id = session_id
         self._key = key if key is not None else _load_key(settings.vault_key)

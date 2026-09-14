@@ -94,7 +94,9 @@ class HashingEmbedder:
 class SovereignEmbedder:
     """Embeddings from an OpenAI-compatible endpoint inside the VPC."""
 
-    def __init__(self, base_url: str, model: str, api_key: str, dimension: int, timeout: float = 10.0):
+    def __init__(
+        self, base_url: str, model: str, api_key: str, dimension: int, timeout: float = 10.0
+    ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key

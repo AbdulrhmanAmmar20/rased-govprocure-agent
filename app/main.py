@@ -62,7 +62,10 @@ async def lifespan(app: FastAPI):
         logger.warning(
             "regulation corpus is not the official text; reports are not legally "
             "certifiable until it is replaced (see docs/corpus-governance.md)",
-            extra={"corpus_status": status, "corpus_version": retriever.corpus_metadata.get("corpus_version")},
+            extra={
+                "corpus_status": status,
+                "corpus_version": retriever.corpus_metadata.get("corpus_version"),
+            },
         )
 
     yield
