@@ -24,8 +24,8 @@ from app.audit.models import Citation
 from app.config import get_settings
 from app.core.exceptions import UngroundedAnswerError
 from app.core.logging import get_logger
-from app.rag.store import SearchHit, VectorStore, build_store, load_corpus
 from app.pii.validators import normalize_arabic, normalize_digits
+from app.rag.store import SearchHit, VectorStore, build_store, load_corpus
 
 logger = get_logger("rased.rag.retriever")
 
@@ -41,12 +41,12 @@ _WORD = re.compile(r"[ء-ٕٱ-ۓ]+")
 # reported as carrying a fabricated citation.
 _ORDINAL_STEMS = frozenset(
     {
-        "اولي", "ثانيه", "ثانيه", "ثالثه", "رابعه", "خامسه", "سادسه", "سابعه",
-        "ثامنه", "تاسعه", "عاشره", "حاديه", "ثانيه", "عشره", "عشر",
+        "اولي", "ثانيه", "ثالثه", "رابعه", "خامسه", "سادسه", "سابعه",
+        "ثامنه", "تاسعه", "عاشره", "حاديه", "عشره", "عشر",
         "عشرون", "عشرين", "ثلاثون", "ثلاثين", "اربعون", "اربعين",
         "خمسون", "خمسين", "ستون", "ستين", "سبعون", "سبعين",
         "ثمانون", "ثمانين", "تسعون", "تسعين", "مئه", "مائه", "مئتان", "مئتين",
-        "الف", "اولي",
+        "الف",
     }
 )
 
@@ -121,7 +121,9 @@ class Retriever:
             _, self.corpus_metadata = load_corpus()
         self.store = store
 
-    def retrieve(self, query: str, *, top_k: int | None = None, min_score: float | None = None) -> RetrievalResult:
+    def retrieve(
+        self, query: str, *, top_k: int | None = None, min_score: float | None = None
+    ) -> RetrievalResult:
         settings = get_settings()
         top_k = top_k if top_k is not None else settings.retrieval_top_k
         min_score = min_score if min_score is not None else settings.retrieval_min_score
