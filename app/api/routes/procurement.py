@@ -16,8 +16,29 @@ from app.core.exceptions import RasedError
 from app.core.rbac import Permission
 from app.core.security import Principal
 from app.pii.disclosure import reveal
+from app.pii.engine import get_engine
 
 router = APIRouter(prefix="/procurement", tags=["procurement"])
+
+
+def _redact_tools(tools: list[dict], session_id: str) -> list[dict]:
+    """Re-mask recorded tool arguments before they cross the HTTP boundary.
+
+    Tool arguments hold real identifiers by design - check_vendor_eligibility
+    cannot query the ERP with a placeholder. Returning them verbatim would let
+    any caller holding regulations:query read original values out of the tool
+    log without passing the pii:reveal check or leaving a disclosure record,
+    which is precisely the bypass FR-1.3 exists to prevent.
+    """
+    engine = get_engine()
+    redacted: list[dict] = []
+    for tool in tools:
+        arguments = {
+            key: engine.remask(value, session_id=session_id) if isinstance(value, str) else value
+            for key, value in tool.get("arguments", {}).items()
+        }
+        redacted.append({**tool, "arguments": arguments})
+    return redacted
 
 
 def _to_response(state) -> ReviewResponse:
@@ -32,7 +53,7 @@ def _to_response(state) -> ReviewResponse:
         refusal_reason=summary["refusal_reason"],
         findings=summary["findings"],
         citations=summary["citations"],
-        tools=summary["tools"],
+        tools=_redact_tools(summary["tools"], state.session_id),
         reasoning_trace=summary["reasoning_trace"],
         masking=summary["masking"],
     )
