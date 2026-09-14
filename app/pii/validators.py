@@ -17,7 +17,9 @@ _DIGIT_TRANSLATION = str.maketrans(
 )
 
 # Separators people type inside long numbers: 1010-99-8877, SA03 8000 0000...
-_SEPARATORS = str.maketrans("", "", " -_ ‏‎")
+# Written as escapes, never literals: invisible bidi marks in source are
+# indistinguishable from a trojan-source attack to a reviewer or a scanner.
+_SEPARATORS = str.maketrans("", "", " -_\u00a0\u200f\u200e")
 
 
 def normalize_digits(value: str) -> str:
