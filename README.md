@@ -4,7 +4,7 @@
 > An AI compliance and audit agent for Saudi government procurement, built to
 > run entirely inside an in-Kingdom sovereign cloud.
 
-[![CI](https://github.com/OWNER/rased-govprocure-agent/actions/workflows/ci.yml/badge.svg)](../../actions)
+[![CI](https://github.com/AbdulrhmanAmmar20/rased-govprocure-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/AbdulrhmanAmmar20/rased-govprocure-agent/actions/workflows/ci.yml)
 
 ---
 
