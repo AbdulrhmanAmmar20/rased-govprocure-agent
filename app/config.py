@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     allowed_residency_prefixes: tuple[str, ...] = ("sa-",)
 
     # ---- Authentication (FR-3.2) -----------------------------------------
-    jwt_secret: str = "dev-only-secret-change-me"
+    # Dev default only: docker-compose and k8s both require a real secret.
+    jwt_secret: str = "dev-only-secret-change-me"  # noqa: S105
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "rased.gov.local"
     jwt_ttl_seconds: int = 3600

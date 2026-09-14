@@ -71,7 +71,9 @@ def review_transaction(
     """Run one procurement review end to end."""
     principal.require(Permission.SUBMIT_PROCUREMENT_REQUEST)
 
-    transaction_id = transaction_id or f"TX-{datetime.now(UTC):%Y%m%d}-{uuid.uuid4().hex[:8].upper()}"
+    if not transaction_id:
+        stamp = f"{datetime.now(UTC):%Y%m%d}"
+        transaction_id = f"TX-{stamp}-{uuid.uuid4().hex[:8].upper()}"
     trail = trail or get_trail()
     actor = ActorRef(**principal.audit_identity())
 
@@ -143,7 +145,10 @@ def decide_approval(
 
     state.status = TransactionStatus.APPROVED if approved else TransactionStatus.REJECTED
     verdict = "اعتمد" if approved else "رفض"
-    state.trace(f"{verdict} صاحب الصلاحية {principal.subject} المعاملة. ملاحظات: {notes or 'لا يوجد'}")
+    state.trace(
+        f"{verdict} صاحب الصلاحية {principal.subject} المعاملة. "
+        f"ملاحظات: {notes or 'لا يوجد'}"
+    )
 
     (trail or get_trail()).append(
         transaction_id=transaction_id,

@@ -52,5 +52,13 @@ target-version = "py311"
 select = ["E", "F", "I", "B", "UP", "S"]
 ignore = ["S101"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares dependencies through call-in-default by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.params.Depends"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test fixtures use literal token ids and dev secrets on purpose.
+"tests/**" = ["S105", "S106"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

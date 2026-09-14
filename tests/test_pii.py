@@ -10,8 +10,8 @@ from app.core.rbac import Role
 from app.pii.disclosure import reveal
 from app.pii.engine import MaskingEngine
 from app.pii.entities import EntityType
-from app.pii.vault import SessionVault
 from app.pii.validators import is_valid_iban, is_valid_saudi_id, normalize_arabic
+from app.pii.vault import SessionVault
 from tests.support import SCENARIO_CR, SCENARIO_REQUEST, principal, temp_trail, valid_saudi_id
 
 

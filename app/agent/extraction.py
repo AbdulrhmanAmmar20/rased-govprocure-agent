@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import re
 
+from app.agent.state import TransactionFacts
 from app.pii.entities import EntityType
 from app.pii.validators import normalize_arabic, normalize_digits
-from app.agent.state import TransactionFacts
 
 # Multipliers written as words after the figure: "120 ألف ريال".
 _MULTIPLIERS = {

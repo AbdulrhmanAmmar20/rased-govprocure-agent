@@ -164,7 +164,8 @@ class TestAuditEndpoints(ApiTestCase):
 
     def test_auditor_can_read_and_verify(self) -> None:
         headers = self.token("auditor", subject="aud-3", department="AUDIT")
-        self.assertEqual(self.client.get(f"{PREFIX}/audit/records", headers=headers).status_code, 200)
+        listing = self.client.get(f"{PREFIX}/audit/records", headers=headers)
+        self.assertEqual(listing.status_code, 200)
         body = self.client.get(f"{PREFIX}/audit/verify", headers=headers).json()
         self.assertTrue(body["verified"], body["message"])
 

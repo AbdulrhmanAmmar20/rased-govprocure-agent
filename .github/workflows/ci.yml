@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Only the runtime floor is installed, deliberately. The suite has to
+      # keep passing without LangGraph, Presidio or ChromaDB present - that is
+      # the air-gapped condition the service is designed for, and installing
+      # the optional stack in CI would let a hard dependency on it creep in
+      # unnoticed.
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run test suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate the regulation corpus
+        run: python -m scripts.seed_regulations --verify
+
+      - name: Smoke-test the CLI
+        run: python -m app.cli demo --quiet
+
+  lint:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt ruff mypy
+
+      - name: Ruff
+        run: ruff check app scripts tests
+
+      - name: Ruff format check
+        run: ruff format --check app scripts tests
+        continue-on-error: true
+
+      - name: Mypy
+        run: mypy app --ignore-missing-imports
+        continue-on-error: true
+
+  security:
+    name: Security checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pip-audit bandit
+
+      - name: Dependency audit
+        run: pip-audit -r requirements.txt
+        continue-on-error: true
+
+      - name: Static analysis
+        run: bandit -r app -ll
+
+      # A committed .env or key is the failure mode this project can least
+      # afford, so it fails the build outright rather than warning.
+      - name: Refuse committed secrets
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|\.pem$|\.key$'; then
+            echo "::error::secret material is tracked in git"
+            exit 1
+          fi
+          echo "no secret material tracked"
+
+      # The corpus ships as a paraphrase on purpose. This reports the fact on
+      # every build so that shipping it stays a decision rather than a drift.
+      - name: Report corpus certification status
+        run: |
+          STATUS=$(python -c "import json;print(json.load(open('app/rag/corpus/gtpl.json',encoding='utf-8'))['source_status'])")
+          echo "corpus source_status: $STATUS"
+          if [ "$STATUS" != "official" ]; then
+            echo "::warning::regulation corpus is '$STATUS'; reports are not legally certifiable (docs/corpus-governance.md)"
+          fi
